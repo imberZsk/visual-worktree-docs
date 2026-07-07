@@ -31,6 +31,8 @@ pnpm start
 - **源项目根目录**：存放多个 Git 仓库的目录，例如 `~/work/projects`
 - **Worktree 根目录**：按任务生成 worktree 的目录，例如 `~/work/worktrees`
 
+![首次配置路径](/img/guide/09-settings.png)
+
 推荐把源项目和 worktree 分开。源项目保留主工作区，需求开发在 worktree 根目录下按任务组织。
 
 ## 推荐目录结构
@@ -66,7 +68,11 @@ pnpm run dist           # 打包 macOS arm64 DMG
 4. 选择这个任务涉及的多个项目。
 5. 输入或确认分支名，提交创建。
 
+![创建第一个任务 Worktree](/img/guide/02-create-worktree.png)
+
 创建完成后，任务会显示在 Worktree 视图里。你可以展开任务查看每个项目的 worktree、分支、未提交变更和快捷操作。
+
+![任务创建后的总览](/img/guide/01-worktree-overview.png)
 
 ## 后续工作流
 

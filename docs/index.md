@@ -29,10 +29,11 @@ Visual Worktree 是一个面向研发同学的 macOS 桌面应用。它把「一
 
 想快速了解完整产品形态，可以从这些内容开始：
 
+- [图文上手指南](/blog/visual-worktree-product-tour)
 - [功能总览](/features)
 - [快速开始](/getting-started)
 - [数据与隐私](/privacy-and-data)
-- [《Visual Worktree：把跨仓库需求收进一个任务工作台》](/blog/visual-worktree-product-tour)
+- [源码仓库](https://github.com/imberZsk/visual-worktree)
 
 ## 适合谁
 

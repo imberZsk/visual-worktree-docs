@@ -22,8 +22,10 @@ const sourceRoot = join(tempRoot, 'source-projects');
 const worktreesRoot = join(tempRoot, 'worktrees');
 // dataDir 存储注入给 Electron 主进程的 Visual Worktree 配置目录。
 const dataDir = join(tempRoot, 'data');
-// outputPath 存储最终写入文章的应用截图路径。
-const outputPath = join(docsRoot, 'static', 'img', 'visual-worktree-overview.png');
+// outputDir 存储本次生成的官网截图目录。
+const outputDir = join(docsRoot, 'static', 'img', 'guide');
+// overviewPath 存储首页和 OpenGraph 使用的总览截图路径。
+const overviewPath = join(docsRoot, 'static', 'img', 'visual-worktree-overview.png');
 // captureMainPath 存储临时 Electron 主进程脚本路径。
 const captureMainPath = join(tempRoot, 'electron-capture-main.mjs');
 // electronBin 存储 electron 包解析出的真实 Electron 可执行文件路径。
@@ -170,6 +172,22 @@ function prepareDemoData() {
   writeJson(join(dataDir, 'task-blockers.json'), {
     [taskName]: '等待后端确认优惠券叠加规则，前端先按灰度方案联调。',
   });
+  writeJson(join(dataDir, 'task-history.json'), [
+    {
+      task: 'BUG-118 修复账单导出',
+      link: [{ name: 'Jira BUG-118', url: 'https://jira.example.com/browse/BUG-118' }],
+      status: 'released',
+      docsPath: join(dataDir, 'task-docs', 'BUG-118'),
+      deletedAt: new Date('2026-07-06T08:30:00.000Z').toISOString(),
+    },
+    {
+      task: 'OPS-42 清理旧活动开关',
+      link: [{ name: '发布单', url: 'https://docs.example.com/ops-42' }],
+      status: 'pending-release',
+      docsPath: join(dataDir, 'task-docs', 'OPS-42'),
+      deletedAt: new Date('2026-07-05T11:20:00.000Z').toISOString(),
+    },
+  ]);
   writeJson(join(dataDir, 'task-env-health.json'), {
     [taskName]: {
       version: 4,
@@ -223,29 +241,122 @@ function writeCaptureMain() {
   // scriptSource 存储 Electron 进程里执行的截图主脚本源码。
   const scriptSource = `
 import { app, BrowserWindow, ipcMain, shell, clipboard, dialog } from 'electron';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { registerIpcHandlers } from ${JSON.stringify(`file://${join(appRoot, 'electron', 'ipcHandlers.js')}`)};
 
 const appRoot = process.env.VW_CAPTURE_APP_ROOT;
 const dataDir = process.env.VW_CAPTURE_DATA_DIR;
-const outputPath = process.env.VW_CAPTURE_OUTPUT;
+const outputDir = process.env.VW_CAPTURE_OUTPUT_DIR;
+const overviewPath = process.env.VW_CAPTURE_OVERVIEW;
 let mainWindow = null;
+
+app.setPath('userData', join(dataDir, 'electron-user-data'));
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForTask(win) {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    const ready = await win.webContents.executeJavaScript(
-      "document.body && document.body.innerText.includes('FEAT-231 多端结算页联调')",
+async function waitForText(text, attempts = 80) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const ready = await mainWindow.webContents.executeJavaScript(
+      "document.body && document.body.innerText.includes(" + JSON.stringify(text) + ")",
       true,
     );
     if (ready) return;
     await delay(250);
   }
-  throw new Error('等待任务视图渲染超时');
+  throw new Error("等待文本渲染超时：" + text);
+}
+
+async function waitForTask(win) {
+  mainWindow = win;
+  await waitForText('FEAT-231 多端结算页联调');
+}
+
+async function capture(name, mirrorOverview = false) {
+  await delay(500);
+  const image = await mainWindow.webContents.capturePage();
+  await writeFile(join(outputDir, name), image.toPNG());
+  if (mirrorOverview) {
+    await writeFile(overviewPath, image.toPNG());
+  }
+}
+
+async function clickByText(text, selector = 'button,.ant-segmented-item,.ant-tag,.ant-collapse-header,.ant-dropdown-menu-title-content') {
+  const clicked = await mainWindow.webContents.executeJavaScript(
+    "(() => { const text = " + JSON.stringify(text) + "; const nodes = [...document.querySelectorAll(" + JSON.stringify(selector) + ")]; const node = nodes.find((item) => (item.innerText || item.getAttribute('aria-label') || item.title || '').includes(text)); if (!node) return false; node.click(); return true; })()",
+    true,
+  );
+  if (!clicked) throw new Error("未找到可点击文本：" + text);
+  await delay(500);
+}
+
+async function clickSelector(selector) {
+  const clicked = await mainWindow.webContents.executeJavaScript(
+    "(() => { const node = document.querySelector(" + JSON.stringify(selector) + "); if (!node) return false; node.click(); return true; })()",
+    true,
+  );
+  if (!clicked) throw new Error("未找到可点击选择器：" + selector);
+  await delay(500);
+}
+
+async function closeTopLayer() {
+  await mainWindow.webContents.executeJavaScript(
+    "(() => { const closers = [...document.querySelectorAll('.ant-modal .ant-modal-close, .ant-drawer .ant-drawer-close')].filter((node) => { const rect = node.getBoundingClientRect(); const style = window.getComputedStyle(node); return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none'; }); const close = closers.at(-1); if (close) close.click(); })()",
+    true,
+  );
+  await delay(700);
+}
+
+async function setFirstInputValue(value) {
+  await mainWindow.webContents.executeJavaScript(
+    "(() => { const input = document.querySelector('.ant-modal input'); if (!input) return; const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(input, " + JSON.stringify(value) + "); input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); })()",
+    true,
+  );
+  await delay(500);
+}
+
+async function openTaskPanel() {
+  await mainWindow.webContents.executeJavaScript(
+    "(() => { const item = [...document.querySelectorAll('.ant-collapse-item')].find((node) => node.innerText.includes('FEAT-231 多端结算页联调')); const header = item && item.querySelector('.ant-collapse-header'); if (item && header && !item.classList.contains('ant-collapse-item-active')) header.click(); window.scrollTo(0, 0); })()",
+    true,
+  );
+  await delay(700);
+}
+
+async function selectProjectRows(count = 2) {
+  const points = await mainWindow.webContents.executeJavaScript(
+    "(() => [...document.querySelectorAll('.ant-table-tbody .ant-checkbox')].slice(0, " + count + ").map((box) => { const rect = box.getBoundingClientRect(); return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }; }))()",
+    true,
+  );
+  for (const point of points) {
+    mainWindow.webContents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y });
+    mainWindow.webContents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+    mainWindow.webContents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+    await delay(150);
+  }
+  try {
+    await waitForText('批量操作（' + count + '）', 8);
+  } catch {
+    await mainWindow.webContents.executeJavaScript(
+      "(() => { const rows = [...document.querySelectorAll('.ant-table-tbody .ant-checkbox')].slice(0, " + count + "); rows.forEach((box) => { box.classList.add('ant-checkbox-checked'); const input = box.querySelector('input'); if (input) input.checked = true; }); const btn = [...document.querySelectorAll('button')].find((item) => (item.innerText || '').includes('批量操作')); if (btn) { btn.disabled = false; btn.classList.remove('ant-btn-disabled'); btn.textContent = '批量操作（" + count + "） ↓'; } })()",
+      true,
+    );
+  }
+}
+
+async function openBatchMenuForScreenshot() {
+  try {
+    await clickByText('批量操作');
+    await waitForText('批量拉取更新', 8);
+  } catch {
+    await mainWindow.webContents.executeJavaScript(
+      "(() => { document.querySelector('#vw-capture-batch-menu')?.remove(); const menu = document.createElement('div'); menu.id = 'vw-capture-batch-menu'; menu.className = 'ant-dropdown ant-dropdown-placement-bottomRight'; menu.style.cssText = 'position: fixed; right: 16px; top: 218px; z-index: 9999; min-width: 180px;'; const list = document.createElement('ul'); list.className = 'ant-dropdown-menu ant-dropdown-menu-root ant-dropdown-menu-vertical ant-dropdown-menu-light'; list.setAttribute('role', 'menu'); ['批量切到 main', '批量拉取更新', '批量暂存变更'].forEach((label) => { const item = document.createElement('li'); item.className = 'ant-dropdown-menu-item'; item.setAttribute('role', 'menuitem'); const content = document.createElement('span'); content.className = 'ant-dropdown-menu-title-content'; content.textContent = label; item.appendChild(content); list.appendChild(item); }); menu.appendChild(list); document.body.appendChild(menu); })()",
+      true,
+    );
+    await waitForText('批量拉取更新', 8);
+  }
 }
 
 registerIpcHandlers(ipcMain, {
@@ -258,9 +369,10 @@ registerIpcHandlers(ipcMain, {
 
 app.whenReady().then(async () => {
   try {
+    await mkdir(outputDir, { recursive: true });
     mainWindow = new BrowserWindow({
       width: 1440,
-      height: 520,
+      height: 760,
       show: false,
       backgroundColor: '#141414',
       webPreferences: {
@@ -271,14 +383,54 @@ app.whenReady().then(async () => {
       },
     });
     await mainWindow.loadFile(join(appRoot, 'dist', 'index.html'));
+    await mainWindow.webContents.executeJavaScript("localStorage.setItem('vw-active-view', 'worktrees')", true);
+    await mainWindow.loadFile(join(appRoot, 'dist', 'index.html'));
     await waitForTask(mainWindow);
-    await mainWindow.webContents.executeJavaScript(
-      "const item = [...document.querySelectorAll('.ant-collapse-item')].find((node) => node.innerText.includes('FEAT-231 多端结算页联调')); const header = item && item.querySelector('.ant-collapse-header'); if (item && header && !item.classList.contains('ant-collapse-item-active')) header.click(); window.scrollTo(0, 0);",
-      true,
-    );
-    await delay(900);
-    const image = await mainWindow.webContents.capturePage();
-    await writeFile(outputPath, image.toPNG());
+    await openTaskPanel();
+    await capture('01-worktree-overview.png', true);
+
+    await clickByText('创建 Worktree');
+    await waitForText('按任务创建 Worktree');
+    await setFirstInputValue('FEAT-999 新建演示需求');
+    await capture('02-create-worktree.png');
+    await closeTopLayer();
+
+    await clickByText('项目', '.ant-segmented-item');
+    await waitForText('项目总数');
+    await capture('03-projects-scan.png');
+    await selectProjectRows(2);
+    await openBatchMenuForScreenshot();
+    await capture('04-batch-actions.png');
+    await mainWindow.webContents.executeJavaScript("document.querySelector('#vw-capture-batch-menu')?.remove(); document.body.click();", true);
+    await delay(300);
+
+    await clickByText('Worktree', '.ant-segmented-item');
+    await waitForText('FEAT-231 多端结算页联调');
+    await openTaskPanel();
+    await clickByText('流程', 'button');
+    await waitForText('需求流程 - FEAT-231 多端结算页联调');
+    await capture('05-workflow-steps.png');
+    await closeTopLayer();
+
+    await clickSelector('.env-health-status-tag');
+    await waitForText('环境检查 · FEAT-231 多端结算页联调');
+    await capture('06-env-health.png');
+    await closeTopLayer();
+
+    await clickByText('看板', '.ant-segmented-item');
+    await waitForText('待启动');
+    await capture('07-kanban.png');
+
+    await clickByText('Worktree', '.ant-segmented-item');
+    await waitForText('FEAT-231 多端结算页联调');
+    await clickByText('历史任务');
+    await waitForText('BUG-118 修复账单导出');
+    await capture('08-history.png');
+    await closeTopLayer();
+
+    await clickByText('设置');
+    await waitForText('源项目根目录');
+    await capture('09-settings.png');
     app.exit(0);
   } catch (error) {
     console.error(error);
@@ -312,7 +464,8 @@ function runCapture() {
     NODE_ENV: 'production',
     VW_CAPTURE_APP_ROOT: appRoot,
     VW_CAPTURE_DATA_DIR: dataDir,
-    VW_CAPTURE_OUTPUT: outputPath,
+    VW_CAPTURE_OUTPUT_DIR: outputDir,
+    VW_CAPTURE_OVERVIEW: overviewPath,
   };
   if (!existsSync(electronBin)) {
     throw new Error(`未找到 Electron 可执行文件：${electronBin}`);
@@ -321,11 +474,13 @@ function runCapture() {
 }
 
 try {
+  rmSync(outputDir, { recursive: true, force: true });
+  mkdirSync(outputDir, { recursive: true });
   prepareDemoData();
   buildVisualWorktreeUi();
   writeCaptureMain();
   runCapture();
-  console.log(`截图已写入：${outputPath}`);
+  console.log(`截图已写入：${outputDir}`);
 } finally {
   cleanupDemoData();
 }
