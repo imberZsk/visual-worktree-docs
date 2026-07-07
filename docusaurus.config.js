@@ -5,6 +5,7 @@ module.exports = {
   baseUrl: '/',
   organizationName: 'imberZsk',
   projectName: 'visual-worktree-docs',
+  favicon: 'img/favicon.ico',
   onBrokenLinks: 'throw',
   markdown: {
     hooks: {
@@ -37,8 +38,17 @@ module.exports = {
   ],
   themeConfig: {
     image: 'img/visual-worktree-overview.png',
+    colorMode: {
+      defaultMode: 'dark',
+      disableSwitch: false,
+      respectPrefersColorScheme: false,
+    },
     navbar: {
       title: 'Visual Worktree',
+      logo: {
+        alt: 'Visual Worktree Logo',
+        src: 'img/logo.png',
+      },
       items: [
         { to: '/', label: '首页', position: 'left' },
         { to: '/features', label: '功能', position: 'left' },
