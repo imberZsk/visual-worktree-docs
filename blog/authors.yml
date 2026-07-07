@@ -1,0 +1,5 @@
+visual-worktree:
+  name: Visual Worktree
+  title: 本地优先的多仓库 worktree 工作台
+  url: https://github.com/imberZsk/visual-worktree
+  image_url: /img/visual-worktree-mark.svg

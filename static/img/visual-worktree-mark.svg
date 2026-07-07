@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Visual Worktree">
+  <rect width="160" height="160" rx="28" fill="#142229"/>
+  <path d="M45 48h70v18H45z" fill="#58d4c3"/>
+  <path d="M45 82h70v18H45z" fill="#f0b84b"/>
+  <path d="M45 116h42v18H45z" fill="#f56b6b"/>
+  <path d="M35 57c-12 0-20 10-20 23s8 23 20 23h10" fill="none" stroke="#d7fbf5" stroke-width="10" stroke-linecap="round"/>
+  <path d="M125 91c12 0 20 10 20 23s-8 23-20 23H87" fill="none" stroke="#d7fbf5" stroke-width="10" stroke-linecap="round"/>
+</svg>
