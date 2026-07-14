@@ -1,6 +1,6 @@
 {
   "name": "visual-worktree-docs",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Visual Worktree 官网与产品文档",
   "homepage": "https://visual-worktree-docs.netlify.app",
@@ -12,7 +12,12 @@
     "start": "docusaurus start --host 0.0.0.0",
     "build": "docusaurus build",
     "serve": "docusaurus serve --host 0.0.0.0",
-    "capture:app": "node scripts/capture-visual-worktree.mjs"
+    "capture:app": "node scripts/capture-visual-worktree.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "prepare": "husky"
   },
   "dependencies": {
     "@docusaurus/core": "3.10.1",
@@ -23,5 +28,15 @@
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@commitlint/cli": "^20.5.3",
+    "@commitlint/config-conventional": "^20.5.3",
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^16.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.9.5"
+  }
 }
